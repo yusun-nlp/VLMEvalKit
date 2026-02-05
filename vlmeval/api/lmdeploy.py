@@ -374,7 +374,7 @@ class InternVL3Adapter(ModelAdapter):
             return response
 
 
-class InternS1_1Adapter(ModelAdapter):
+class InternS1_1NoThinkAdapter(ModelAdapter):
 
     def __init__(self):
         self.cot_prompt = None
@@ -500,21 +500,21 @@ class InternS1_1Adapter(ModelAdapter):
     def postprocess(self, response: str, dataset: str | None = None):
         if self.split_think and '<think>' in response and '</think>' in response:
             thinking, _, answer = response.partition('<think>')[-1].partition('</think>')
-            print('-----------Thinking------------------')
-            print(thinking)
-            print('-------------------------------------')
+            logger.info('-----------Thinking-----------\n'
+                        f'{thinking}\n'
+                        '------------------------------')
             return answer
         elif self.split_think and '</think>' in response:
             thinking, _, answer = response.partition('</think>')
-            print('-----------Thinking------------------')
-            print(thinking)
-            print('-------------------------------------')
+            logger.info('-----------Thinking-----------\n'
+                        f'{thinking}\n'
+                        '------------------------------')
             return answer
         else:
             return response
 
 
-class InternS1_1_NoCustomPromptAdapter(ModelAdapter):
+class InternS1_1ThinkAdapter(ModelAdapter):
 
     def __init__(self):
         self.cot_prompt = None
@@ -523,6 +523,111 @@ class InternS1_1_NoCustomPromptAdapter(ModelAdapter):
 
     def dump_image(self, line, dataset):
         return self.dump_image_func(line)
+
+    def use_custom_prompt(self, dataset, system_prompt=None):
+        if dataset in ['SFE', 'SFE-zh', 'IPhO_2025']:
+            return True
+        else:
+            return False
+
+    def build_prompt(self, line, dataset=None):
+        assert self.use_custom_prompt(dataset)
+        if listinstr(['SFE'], dataset):
+            return self.build_sfe_prompt(line, dataset)
+        elif listinstr(['IPhO_2025'], dataset):
+            return self.build_hipho_prompt(line, dataset)
+        else:
+            assert False, "custom prompt not supported for dataset: " + dataset
+
+    def build_sfe_prompt(self, line, dataset):
+        MCQ_PROMPT = (
+            "You are an expert in {discipline} and need to solve the following question."
+        )
+
+        EXACT_MATCH_PROMPT = (
+            "You are an expert in {discipline} and need to solve the following question."
+        )
+
+        OPEN_QUESTION_PROMPT = (
+            "You are an expert in {discipline} and need to solve the following question."
+        )
+        tgt_path = self.dump_image(line, dataset)
+
+        question_type = line['question_type']
+        field = line['category']
+        question = line['question']
+
+        if question_type == 'exact_match':
+            prompt = EXACT_MATCH_PROMPT.format(discipline=field)
+            question = prompt + " " + question
+        elif question_type == 'mcq':
+            prompt = MCQ_PROMPT.format(discipline=field)
+            question = prompt + " " + question
+            if not pd.isna(line['A']):
+                question += '\nChoices are:\n'
+                for ch in string.ascii_uppercase[:15]:
+                    if not pd.isna(line[ch]):
+                        question += f'{ch}. {line[ch]}\n'
+                    else:
+                        break
+        elif question_type == 'open_ended':
+            prompt = OPEN_QUESTION_PROMPT.format(discipline=field)
+            question = prompt + " " + question
+
+        prompt_segs = question.split('<image>')
+        assert len(prompt_segs) == len(tgt_path) + 1
+        msgs = []
+        for i in range(len(tgt_path)):
+            text = prompt_segs[i].strip()
+            if text != '':
+                msgs.append(dict(type='text', value=text))
+            msgs.append(dict(type='image', value=tgt_path[i]))
+        text = prompt_segs[-1].strip()
+        if text != '':
+            msgs.append(dict(type='text', value=text))
+        return msgs
+
+    def build_hipho_prompt(self, line, dataset):
+        """Build physics competition prompt"""
+        def safe_str(val):
+            return "" if pd.isna(val) or val == '' else str(val)
+
+        context = safe_str(line.get('context', ''))
+        question = safe_str(line['question'])
+        information = safe_str(line.get('information', ''))
+
+        SYSTEM_PROMPTS_EN = (
+            'Please answer the problem adhering to the following rules:\n'
+            '1. Please use LaTeX format to represent the variables and formulas used in the solution process and results.\n'
+            '2. Please put the final answer(s) in \\boxed{}, note that the unit of the answer should not be included in \\boxed{}.\n'
+            '3. If the problem requires multiple answers, list them in order, each in a separate \\boxed{}.\n'
+            'Problem: Information:{information}\n'
+            'Context:{context}\n'
+            'Question: {problem}')
+        system_prompt = SYSTEM_PROMPTS_EN
+        formatted_prompt = (system_prompt.replace(
+            '{context}',
+            context).replace('{problem}',
+                             question).replace('{information}', information))
+
+        msgs = []
+
+        # Check for real image data (excluding placeholders)
+        image_val = str(line.get('image', '')).strip()
+
+        if image_val and not image_val.startswith('NO_IMAGE_PLACEHOLDER_'):
+            tgt_path = self.dump_image(line, dataset)
+
+            if tgt_path and tgt_path != ['']:
+                if isinstance(tgt_path, list):
+                    msgs.extend([dict(type='image', value=p) for p in tgt_path])
+                else:
+                    msgs.append(dict(type='image', value=tgt_path))
+
+        msgs.append(dict(type='text', value=formatted_prompt))
+
+        return msgs
+
 
     def process_inputs(self, inputs: dict, dataset: str | None) -> dict:
         from vlmeval.vlm.internvl.utils import reorganize_prompt, build_video_prompt
@@ -545,19 +650,19 @@ class InternS1_1_NoCustomPromptAdapter(ModelAdapter):
         prompt = prompt.replace('<image>', '<IMAGE_TOKEN>')
         inputs = [*image_items, dict(type='text', value=prompt)]
         return inputs
-    
+
     def postprocess(self, response: str, dataset: str | None = None):
         if self.split_think and '<think>' in response and '</think>' in response:
             thinking, _, answer = response.partition('<think>')[-1].partition('</think>')
-            print('-----------Thinking------------------')
-            print(thinking)
-            print('-------------------------------------')
+            logger.info('-----------Thinking-----------\n'
+                        f'{thinking}\n'
+                        '------------------------------')
             return answer
         elif self.split_think and '</think>' in response:
             thinking, _, answer = response.partition('</think>')
-            print('-----------Thinking------------------')
-            print(thinking)
-            print('-------------------------------------')
+            logger.info('-----------Thinking-----------\n'
+                        f'{thinking}\n'
+                        '------------------------------')
             return answer
         else:
             return response
@@ -627,8 +732,8 @@ class LMDeployWrapper(BaseAPI):
         'internvl2': InternVL2Adapter,
         'internvl2-mpo-cot': partial(InternVL2Adapter, use_mpo_prompt=True),
         'internvl3': InternVL3Adapter,
-        'interns1_1': InternS1_1Adapter,
-        'interns1_1_no_custom_prompt': InternS1_1_NoCustomPromptAdapter,
+        'interns1_1_no_think': InternS1_1NoThinkAdapter,
+        'interns1_1_think': InternS1_1ThinkAdapter,
         'qwen3': Qwen3Adapter,
     }
 

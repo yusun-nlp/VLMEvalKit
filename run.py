@@ -181,17 +181,23 @@ You can launch the evaluation by setting either --data and --model or --config.
     parser.add_argument('--thinker', action='store_true', help='Longer timeout and Higher max_tokens.')
     parser.add_argument('--use-enable-thinking', action='store_true', help='Use enable thinking.')
     parser.add_argument('--enable-thinking', action='store_true', help='Enable thinking.')
-    parser.add_argument('--temperature', type=float, default=0.7)
-    parser.add_argument('--top-k', type=int, default=50)
-    parser.add_argument('--top-p', type=float, default=1.0)
+    parser.add_argument('--max-tokens', type=float, default=2**15)
+    parser.add_argument('--temperature', type=float, default=None)
+    parser.add_argument('--top-k', type=int, default=None)
+    parser.add_argument('--top-p', type=float, default=None)
     parser.add_argument('--repetition-penalty', type=float, default=None)
+    parser.add_argument('--frequency-penalty', type=float, default=None)
+    parser.add_argument('--presence-penalty', type=float, default=None)
+    parser.add_argument('--retry', type=int, default=6, help='Retry times for failed infernece.')
     parser.add_argument('--api-nproc', type=int, default=32, help='Parallel API calling')
     parser.add_argument('--timeout', type=int, default=1800, help='Max time for inferencing.')
     # ================ judge 模型参数 ==============
     parser.add_argument('--judge', type=str, default=None)
     parser.add_argument('--judge-base-url', type=str, default=None, help='the base url of judger')
-    parser.add_argument('--judge-key', type=str, default='sk-admin', help='the key of judger')
+    parser.add_argument('--judge-key', type=str, default=None, help='the key of judger')
+    parser.add_argument('--judge-retry', type=int, default=6, help='Retry times for failed judgement.')
     parser.add_argument('--judge-api-nproc', type=int, default=32, help='Parallel API calling for judger')
+    parser.add_argument('--judge-timeout', type=int, default=600, help='Max time for judgement.')
     # legacy judger parameters
     parser.add_argument('--judge-args', type=str, default=None, help='Judge arguments in JSON format')
     # ==============================================
@@ -204,8 +210,6 @@ You can launch the evaluation by setting either --data and --model or --config.
     parser.add_argument('--work-dir', type=str, default='./outputs', help='select the output directory')
     # Infer + Eval or Infer Only
     parser.add_argument('--mode', type=str, default='all', choices=['all', 'infer', 'eval'])
-    # API Kwargs, Apply to API VLMs and Judge API LLMs
-    parser.add_argument('--retry', type=int, default=None, help='retry numbers for API VLMs')
     # Logging Utils
     parser.add_argument('--verbose', action='store_true')
     # Configuration for Resume
@@ -289,8 +293,6 @@ def main():
         api_model_name = model_name
         model_name = model_name.replace('/', '--')
         use_think_args = args.thinker
-        enable_thinking = args.enable_thinking
-        use_enable_thinking = args.use_enable_thinking
         if data_split is not None:
             # 设定 group-wise 参数
             args.data = group_dic[data_split[i]]
@@ -299,42 +301,24 @@ def main():
 
         if args.base_url is not None:
             # 如果指定了 --api，则使用 LMDeployAPI 进行模型推理
-            if use_enable_thinking:
-                # 参数里面传入enable_thinking参数
-                model_args = dict(
-                    model=api_model_name,
-                    api_base=f"{args.base_url.rstrip('/')}/chat/completions",
-                    key=args.key,
-                    custom_prompt=args.custom_prompt,
-                    max_tokens=2**15,
-                    retry=6,
-                    timeout=args.timeout,
-                    temperature=args.temperature,
-                    top_k=args.top_k,
-                    top_p=args.top_p,
-                    enable_thinking=enable_thinking,
-                    repetition_penalty=args.repetition_penalty,
-                    verbose=args.verbose,
-                    # system_prompt="You are an expert reasoner with extensive experience in all areas. You approach problems through systematic thinking and rigorous reasoning. Your response should reflect deep understanding and precise logical thinking, making your solution path and reasoning clear to others. Please put your thinking process within <think>...</think> tags.",
-                )
-            else:
-                model_args = dict(
-                    model=api_model_name,
-                    api_base=f"{args.base_url.rstrip('/')}/chat/completions",
-                    key=args.key,
-                    custom_prompt=args.custom_prompt,
-                    max_tokens=2**15,
-                    retry=6,
-                    timeout=args.timeout,
-                    temperature=args.temperature,
-                    top_k=args.top_k,
-                    top_p=args.top_p,
-                    repetition_penalty=args.repetition_penalty,
-                    verbose=args.verbose,
-                    # system_prompt="You are an expert reasoner with extensive experience in all areas. You approach problems through systematic thinking and rigorous reasoning. Your response should reflect deep understanding and precise logical thinking, making your solution path and reasoning clear to others. Please put your thinking process within <think>...</think> tags.",
-                )
+            model_args = dict(
+                model=api_model_name,
+                api_base=f"{args.base_url.rstrip('/')}/chat/completions",
+                key=args.key,
+                custom_prompt=args.custom_prompt,
+                max_tokens=args.max_tokens,
+                retry=args.retry,
+                timeout=args.timeout,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                top_p=args.top_p,
+                repetition_penalty=args.repetition_penalty,
+                verbose=args.verbose,
+            )
+            if args.use_enable_thinking:
+                model_args.update(dict(enable_thinking=args.enable_thinking))
             if use_think_args:
-                model_args.update(dict(timeout=args.timeout * 2, max_tokens=2**16))
+                model_args.update(dict(timeout=args.timeout * 2, max_tokens=args.max_tokens * 2))
             supported_VLM[model_name] = partial(LMDeployAPI, **model_args)
         else:
             assert model_name in supported_VLM, f'unsupported internal VLM name, considering use `--api`.'
@@ -439,17 +423,16 @@ def main():
                 # Set the judge kwargs first before evaluation or dumping
 
                 judge_kwargs = {
-                    'nproc': args.judge_api_nproc,
                     'verbose': args.verbose,
-                    'retry': args.retry if args.retry is not None else 3,
+                    'nproc': args.judge_api_nproc,
+                    'retry': args.judge_retry,
+                    'timeout': args.judge_timeout,
                     **(json.loads(args.judge_args) if args.judge_args else {}),
                 }
                 if args.judge_base_url:
                     judge_kwargs['api_base'] = f"{args.judge_base_url.rstrip('/')}/chat/completions"
                 if args.judge_key:
                     judge_kwargs['key'] = args.judge_key
-                if args.retry is not None:
-                    judge_kwargs['retry'] = args.retry
 
                 if args.judge is not None:
                     judge_kwargs['model'] = args.judge

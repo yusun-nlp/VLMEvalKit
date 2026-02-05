@@ -698,30 +698,24 @@ class MathVision(ImageBaseDataset):
 class Physics_yale(ImageBaseDataset):
     TYPE = 'VQA'
     DATASET_URL = {
-        'atomic_dataset':
-        'http://opencompass.openxlab.space/utils/benchmarks/physics/atomic_dataset.tsv',
-        'electro_dataset':
-        'http://opencompass.openxlab.space/utils/benchmarks/physics/electro_dataset.tsv',
-        'mechanics_dataset':
-        'http://opencompass.openxlab.space/utils/benchmarks/physics/mechanics_dataset.tsv',
-        'optics_dataset':
-        'http://opencompass.openxlab.space/utils/benchmarks/physics/optics_dataset.tsv',
-        'quantum_dataset':
-        'http://opencompass.openxlab.space/utils/benchmarks/physics/quantum_dataset.tsv',
-        'statistics_dataset':
-        'http://opencompass.openxlab.space/utils/benchmarks/physics/statistics_dataset.tsv',
+        'atomic_dataset': '',
+        'electro_dataset': '',
+        'mechanics_dataset': '',
+        'optics_dataset': '',
+        'quantum_dataset': '',
+        'statistics_dataset': '',
         'Physics_blankim': 'http://opencompass.openxlab.space/utils/benchmarks/physics/Physics_blankim.tsv',
-        'Physics': 'http://opencompass.openxlab.space/utils/benchmarks/physics/Physics.tsv'
+        'Physics': '',
     }
     DATASET_MD5 = {
-        'atomic_dataset': 'b927fae6bcc6163b0bd89041e4421c70',
-        'electro_dataset': '66db62cdbc468bb003e6d09592b94b59',
-        'mechanics_dataset': '11f287a18ccc6227bea15fa89f24de67',
-        'optics_dataset': '39ab9028ae4a33c06f78ce8618668172',
-        'quantum_dataset': 'd2610f9938ad1e848259ccbcd5ac3acf',
-        'statistics_dataset': '78242aa2431a477782b5b3de1c18d633',
+        'atomic_dataset': '4b56bcd07299ec57acd72432f38e54e6',
+        'electro_dataset': '556cb0ac7031d82c574738abd4c1d041',
+        'mechanics_dataset': '08dcfd3e5bc18678ffb2cd910e3c6a99',
+        'optics_dataset': '60bcc5a3df7d2db4e040d66be8e11999',
+        'quantum_dataset': '0318a1613bff8b454d8090d2b9006663',
+        'statistics_dataset': 'b0b35be3a71704bbd06e3cfbe8fe0ac5',
         'Physics_blankim': 'b4136f27f09339698f636111c07824e9',
-        'Physics': '528d66b7365f9d4db2b58fdeadeade71'
+        'Physics': 'de78a33dd10f833c568602db6d52f275'
     }
 
     def __init__(self, dataset='Physics', skip_noimg=False):
@@ -732,10 +726,30 @@ class Physics_yale(ImageBaseDataset):
 
         data = self.load_data(dataset)
         self.skip_noimg = skip_noimg
+        if skip_noimg and 'image' in data:
+            data = data[~pd.isna(data['image'])]
+
         data['index'] = [str(x) for x in data['index']]
-        self.meta_only = False
+
+        self.meta_only = True
+
+        # The image field can store the base64 encoded image or another question index (for saving space)
+        if 'image' in data:
+            images = [toliststr(x) for x in data['image']]
+            data['image'] = [x[0] if len(x) == 1 else x for x in images]
+            self.meta_only = False
+
+        if 'image_path' in data:
+            paths = [toliststr(x) for x in data['image_path']]
+            data['image_path'] = [x[0] if len(x) == 1 else x for x in paths]
+
+        if 'answer' in data:
+            answers = [toliststr(x) for x in data['answer']]
+            data['answer'] = answers
+
         if np.all([istype(x, int) for x in data['index']]):
             data['index'] = [int(x) for x in data['index']]
+
         self.data = data
         self.post_build(dataset)
 
@@ -743,13 +757,10 @@ class Physics_yale(ImageBaseDataset):
         if isinstance(line, int):
             line = self.data.iloc[line]
 
-        if pd.isna(line['image']):
-            tgt_path = None
+        if self.meta_only:
+            tgt_path = toliststr(line['image_path'])
         else:
-            if self.meta_only:
-                tgt_path = toliststr(line['image'])
-            else:
-                tgt_path = self.dump_image(line)
+            tgt_path = self.dump_image(line)
 
         instruction = (
             "You are a physics expert assistant. Solve the following question step-by-step.\n\n"
@@ -781,7 +792,6 @@ class Physics_yale(ImageBaseDataset):
 
         return msgs
 
-    @classmethod
     def evaluate(self, eval_file, **judge_kwargs):
         from .utils.physic import PHYSIC_acc, PHYSIC_auxeval
 
@@ -802,7 +812,7 @@ class Physics_yale(ImageBaseDataset):
 
             lt = len(data)
             lines = [data.iloc[i] for i in range(lt)]
-            tups = [(model, line) for line in lines]
+            tups = [(model, line, self.data.iloc[i]['answer']) for i, line in enumerate(lines)]
             indices = [line['index'] for line in lines]
 
             ans = {}
