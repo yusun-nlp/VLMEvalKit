@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 from functools import partial
+from datetime import datetime
 
 
 # GET the number of GPUs on the node without importing libs like torch
@@ -47,6 +48,7 @@ from vlmeval.inference_video import infer_data_job_video
 from vlmeval.inference_mt import infer_data_job_mt
 from vlmeval.smp import *
 from vlmeval.utils.result_transfer import MMMU_result_transfer, MMTBench_result_transfer
+from vlmeval.api import LMDeployAPI
 
 
 # Make WORLD_SIZE invisible when build models
@@ -171,18 +173,39 @@ You can launch the evaluation by setting either --data and --model or --config.
     parser = argparse.ArgumentParser(description=help_msg, formatter_class=argparse.RawTextHelpFormatter)
     # Essential Args, Setting the Names of Datasets and Models
     parser.add_argument('--data', type=str, nargs='+', help='Names of Datasets')
-    parser.add_argument('--model', type=str, nargs='+', help='Names of Models')
+    parser.add_argument('--group', type=str, nargs='+', default=None)
+    # ================ 推理模型参数 ==============
+    parser.add_argument('--model', type=str, required=True)
+    parser.add_argument('--base-url', type=str, default=None)
+    parser.add_argument('--key', type=str, default='sk-admin')
+    parser.add_argument('--thinker', action='store_true', help='Longer timeout and Higher max_tokens.')
+    parser.add_argument('--use-enable-thinking', action='store_true', help='Use enable thinking.')
+    parser.add_argument('--enable-thinking', action='store_true', help='Enable thinking.')
+    parser.add_argument('--temperature', type=float, default=0.7)
+    parser.add_argument('--top-k', type=int, default=50)
+    parser.add_argument('--top-p', type=float, default=1.0)
+    parser.add_argument('--repetition-penalty', type=float, default=None)
+    parser.add_argument('--api-nproc', type=int, default=32, help='Parallel API calling')
+    parser.add_argument('--timeout', type=int, default=1800, help='Max time for inferencing.')
+    # ================ judge 模型参数 ==============
+    parser.add_argument('--judge', type=str, default=None)
+    parser.add_argument('--judge-base-url', type=str, default=None, help='the base url of judger')
+    parser.add_argument('--judge-key', type=str, default='sk-admin', help='the key of judger')
+    parser.add_argument('--judge-api-nproc', type=int, default=32, help='Parallel API calling for judger')
+    # legacy judger parameters
+    parser.add_argument('--judge-args', type=str, default=None, help='Judge arguments in JSON format')
+    # ==============================================
+    parser.add_argument('--custom-prompt',
+                        type=str,
+                        choices=list(LMDeployAPI.adapter_map.keys()),
+                        default=None)
     parser.add_argument('--config', type=str, help='Path to the Config Json File')
     # Work Dir
     parser.add_argument('--work-dir', type=str, default='./outputs', help='select the output directory')
     # Infer + Eval or Infer Only
     parser.add_argument('--mode', type=str, default='all', choices=['all', 'infer', 'eval'])
     # API Kwargs, Apply to API VLMs and Judge API LLMs
-    parser.add_argument('--api-nproc', type=int, default=4, help='Parallel API calling')
     parser.add_argument('--retry', type=int, default=None, help='retry numbers for API VLMs')
-    parser.add_argument('--judge-args', type=str, default=None, help='Judge arguments in JSON format')
-    # Explicitly Set the Judge Model
-    parser.add_argument('--judge', type=str, default=None)
     # Logging Utils
     parser.add_argument('--verbose', action='store_true')
     # Configuration for Resume
@@ -199,27 +222,52 @@ You can launch the evaluation by setting either --data and --model or --config.
     args = parser.parse_args()
     return args
 
+group_dic = {
+    "general-mini": ["MMMU_Pro_10c"],
+    "math-reasoning-mini": ["MathVista_MINI", "OlympiadBench", "IPhO_2025",  "Physics"],
+    "sci-reasoning-mini": ["SFE", "MaCBench", "MicroVQA", "XLRS-Bench-lite", "MSEarthMCQ"],
+    "language-mini": ["MM-IFEval"],
+    "coding-mini": ["ChartMimic_v2_direct"],
+    "svg-mini": ["SArena_MINI"],
+    "agent-mini": ["ScreenSpot_v2_Mobile", "ScreenSpot_v2_Desktop", "ScreenSpot_v2_Web"],
+    "video-mini": ["Video-MME_64frame", "VideoMMMU_48frame"],
+    "sensing-mini": ["RefCOCO", "OCRBench_v2_MINI", "CCOCR", "ChartQAPro", "BLINK"],
+}
 
 def main():
-    logger = get_logger('RUN')
     args = parse_args()
+
+    date, commit_id = timestr('day'), githash(digits=8)
+    eval_id = f"T{date}_G{commit_id}"
+    log_file = Path(args.work_dir) / 'logs' / f'{eval_id}_{datetime.datetime.now().strftime("%H%M%S")}.log'
+    logger = setup_logger(log_file=log_file)
+    logger.info(f'Log file: {log_file}')
+
     use_config, cfg = False, None
+
+    # ==============================================
+    if args.group is not None and len(args.group) > 0:
+        if 'all' in args.group:
+            data_split = list(group_dic.keys())
+        else:
+            data_split = args.group
+        args.model = len(data_split) * [args.model]
+    else:
+        args.model = [args.model]
+        data_split = None
+    # ==============================================
+
     if args.config is not None:
-        assert args.data is None and args.model is None, '--data and --model should not be set when using --config'
+        assert args.data is None and args.model is None and args.group is None, '--data and --model should not be set when using --config'
         use_config, cfg = True, load(args.config)
         args.model = list(cfg['model'].keys())
         args.data = list(cfg['data'].keys())
-    else:
-        assert len(args.data), '--data should be a list of data files'
 
     if RANK == 0:
         if not args.reuse:
             logger.warning('--reuse is not set, will not reuse previous (before one day) temporary files')
         else:
-            logger.warning('--reuse is set, will reuse the latest prediction & temporary pickle files')
-
-    if 'MMEVAL_ROOT' in os.environ:
-        args.work_dir = os.environ['MMEVAL_ROOT']
+            logger.info('--reuse is set, will reuse the latest prediction & temporary pickle files')
 
     if not use_config:
         for k, v in supported_VLM.items():
@@ -230,16 +278,6 @@ def main():
                 v.keywords['verbose'] = args.verbose
                 supported_VLM[k] = v
 
-        # If FWD_API is set, will use class `GPT4V` for all API models in the config
-        if os.environ.get('FWD_API', None) == '1':
-            from vlmeval.config import api_models as supported_APIs
-            from vlmeval.api import GPT4V
-            for m in args.model:
-                if m in supported_APIs:
-                    kws = supported_VLM[m].keywords
-                    supported_VLM[m] = partial(GPT4V, **kws)
-                    logger.warning(f'FWD_API is set, will use class `GPT4V` for {m}')
-
     if WORLD_SIZE > 1:
         import torch.distributed as dist
         dist.init_process_group(
@@ -247,11 +285,61 @@ def main():
             timeout=datetime.timedelta(seconds=int(os.environ.get('DIST_TIMEOUT', 3600)))
         )
 
-    for _, model_name in enumerate(args.model):
-        model = None
-        date, commit_id = timestr('day'), githash(digits=8)
-        eval_id = f"T{date}_G{commit_id}"
+    for i, model_name in enumerate(args.model):
+        api_model_name = model_name
+        model_name = model_name.replace('/', '--')
+        use_think_args = args.thinker
+        enable_thinking = args.enable_thinking
+        use_enable_thinking = args.use_enable_thinking
+        if data_split is not None:
+            # 设定 group-wise 参数
+            args.data = group_dic[data_split[i]]
+            use_think_args = args.thinker or ('reasoning' in data_split[i])
+            logger.info(f"Evaluating group {data_split[i]}, benchmarks: {args.data}")
 
+        if args.base_url is not None:
+            # 如果指定了 --api，则使用 LMDeployAPI 进行模型推理
+            if use_enable_thinking:
+                # 参数里面传入enable_thinking参数
+                model_args = dict(
+                    model=api_model_name,
+                    api_base=f"{args.base_url.rstrip('/')}/chat/completions",
+                    key=args.key,
+                    custom_prompt=args.custom_prompt,
+                    max_tokens=2**15,
+                    retry=6,
+                    timeout=args.timeout,
+                    temperature=args.temperature,
+                    top_k=args.top_k,
+                    top_p=args.top_p,
+                    enable_thinking=enable_thinking,
+                    repetition_penalty=args.repetition_penalty,
+                    verbose=args.verbose,
+                    # system_prompt="You are an expert reasoner with extensive experience in all areas. You approach problems through systematic thinking and rigorous reasoning. Your response should reflect deep understanding and precise logical thinking, making your solution path and reasoning clear to others. Please put your thinking process within <think>...</think> tags.",
+                )
+            else:
+                model_args = dict(
+                    model=api_model_name,
+                    api_base=f"{args.base_url.rstrip('/')}/chat/completions",
+                    key=args.key,
+                    custom_prompt=args.custom_prompt,
+                    max_tokens=2**15,
+                    retry=6,
+                    timeout=args.timeout,
+                    temperature=args.temperature,
+                    top_k=args.top_k,
+                    top_p=args.top_p,
+                    repetition_penalty=args.repetition_penalty,
+                    verbose=args.verbose,
+                    # system_prompt="You are an expert reasoner with extensive experience in all areas. You approach problems through systematic thinking and rigorous reasoning. Your response should reflect deep understanding and precise logical thinking, making your solution path and reasoning clear to others. Please put your thinking process within <think>...</think> tags.",
+                )
+            if use_think_args:
+                model_args.update(dict(timeout=args.timeout * 2, max_tokens=2**16))
+            supported_VLM[model_name] = partial(LMDeployAPI, **model_args)
+        else:
+            assert model_name in supported_VLM, f'unsupported internal VLM name, considering use `--api`.'
+
+        model = None
         pred_root = osp.join(args.work_dir, model_name, eval_id)
         pred_root_meta = osp.join(args.work_dir, model_name)
         os.makedirs(pred_root_meta, exist_ok=True)
@@ -267,6 +355,7 @@ def main():
             model = build_model_from_config(cfg['model'], model_name, args.use_vllm)
 
         for _, dataset_name in enumerate(args.data):
+            logger.info(f'-------------------- {dataset_name} --------------------')
             if WORLD_SIZE > 1:
                 dist.barrier()
 
@@ -350,18 +439,24 @@ def main():
                 # Set the judge kwargs first before evaluation or dumping
 
                 judge_kwargs = {
-                    'nproc': args.api_nproc,
+                    'nproc': args.judge_api_nproc,
                     'verbose': args.verbose,
                     'retry': args.retry if args.retry is not None else 3,
                     **(json.loads(args.judge_args) if args.judge_args else {}),
                 }
-
+                if args.judge_base_url:
+                    judge_kwargs['api_base'] = f"{args.judge_base_url.rstrip('/')}/chat/completions"
+                if args.judge_key:
+                    judge_kwargs['key'] = args.judge_key
                 if args.retry is not None:
                     judge_kwargs['retry'] = args.retry
+
                 if args.judge is not None:
                     judge_kwargs['model'] = args.judge
                 else:
-                    print(dataset_name)
+                    # Default judger
+                    judge_kwargs['model'] = 'gpt-4o-mini'
+
                     if dataset.TYPE in ['MCQ', 'Y/N', 'MCQ_MMMU_Pro'] or listinstr(
                         ['moviechat1k', 'mme-reasoning'], dataset_name.lower()
                     ):
@@ -404,14 +499,13 @@ def main():
                         judge_kwargs['model'] = 'gpt-4.1-2025-04-14'
                     elif listinstr(['MMReason'], dataset_name):
                         judge_kwargs['model'] = 'gpt-4.1'
+                    elif listinstr(['Video-MME'], dataset_name):
+                        judge_kwargs['model'] = 'chatgpt-0125'
 
                 if args.use_verifier:
                     judge_kwargs['use_verifier'] = True
                 if args.use_vllm:
                     judge_kwargs['use_vllm'] = True
-
-                if RANK == 0:
-                    logger.info(judge_kwargs)
 
                 if WORLD_SIZE > 1:
                     dist.barrier()
@@ -434,6 +528,8 @@ def main():
                     # Skip the evaluation part if only infer
                     if args.mode == 'infer':
                         continue
+
+                    logger.info(f'Start to judge with {judge_kwargs}')
 
                     # Skip the evaluation part if the dataset evaluation is not supported or annotations are missing
                     if 'MLLMGuard_DS' in dataset_name:
@@ -458,7 +554,7 @@ def main():
                     # Setup the proxy for the evaluation
                     eval_proxy = os.environ.get('EVAL_PROXY', None)
                     old_proxy = os.environ.get('HTTP_PROXY', '')
-                    if eval_proxy is not None:
+                    if eval_proxy:
                         proxy_set(eval_proxy)
 
                     # Perform the Evaluation
@@ -476,7 +572,7 @@ def main():
                             logger.info('\n' + tabulate(eval_results))
 
                     # Restore the proxy
-                    if eval_proxy is not None:
+                    if eval_proxy:
                         proxy_set(old_proxy)
 
                     # Create the symbolic links for the prediction files

@@ -1,6 +1,8 @@
 from vlmeval.smp import *
 from vlmeval.api.base import BaseAPI
 
+logger = get_logger(__name__)
+
 url = 'https://api.stepfun.com/v1/chat/completions'
 headers = {
     'Content-Type': 'application/json',
@@ -74,8 +76,8 @@ class StepAPI_INT(BaseAPI):
             answer = resp_struct['choices'][0]['message']['content'].strip()
         except Exception as err:
             if self.verbose:
-                self.logger.error(f'{type(err)}: {err}')
-                self.logger.error(response.text if hasattr(response, 'text') else response)
+                logger.error(f'{type(err)}: {err}')
+                logger.error(response.text if hasattr(response, 'text') else response)
 
         return ret_code, answer, response
 

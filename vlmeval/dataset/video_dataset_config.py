@@ -44,7 +44,8 @@ videomme_dataset = {
 
 videommmu_dataset = {
     'VideoMMMU_8frame': partial(VideoMMMU, dataset='VideoMMMU', nframe=8),
-    'VideoMMMU_64frame': partial(VideoMMMU, dataset='VideoMMMU', nframe=64),
+    'VideoMMMU_24frame': partial(VideoMMMU, dataset='VideoMMMU', nframe=24),
+    'VideoMMMU_48frame': partial(VideoMMMU, dataset='VideoMMMU', nframe=48),
     'VideoMMMU_1fps': partial(VideoMMMU, dataset='VideoMMMU', fps=1.0),
     'VideoMMMU_0.5fps': partial(VideoMMMU, dataset='VideoMMMU', fps=0.5),
 }

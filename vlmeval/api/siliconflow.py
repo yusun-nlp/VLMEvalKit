@@ -5,6 +5,7 @@ from vlmeval.dataset import img_root_map
 
 API_BASE = "https://api.siliconflow.cn/v1/chat/completions"
 
+logger = get_logger(__name__)
 
 def resize_image(image: Image.Image, max_height: int, max_width: int) -> Image.Image:
     width, height = image.size
@@ -272,6 +273,6 @@ class TeleMMAPI(SiliconFlowAPI):
 
             traceback.print_exc()
             if self.verbose:
-                self.logger.error(f"{type(err)}: {err}")
-                self.logger.error(f"The input messages are {inputs}.")
+                logger.error(f"{type(err)}: {err}")
+                logger.error(f"The input messages are {inputs}.")
             return -1, "", ""

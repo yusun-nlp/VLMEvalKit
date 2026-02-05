@@ -1,6 +1,5 @@
 import json
 import pickle
-import warnings
 import pandas as pd
 import os
 import csv
@@ -11,8 +10,11 @@ import numpy as np
 import validators
 import mimetypes
 import multiprocessing as mp
+from .log import get_logger
 from .misc import toliststr
 from .vlm import decode_base64_to_image_file
+
+logger = get_logger(__name__)
 
 
 def decode_img_omni(tup):
@@ -76,17 +78,8 @@ def LMUDataRoot():
 
 
 def HFCacheRoot():
-    cache_list = ['HUGGINGFACE_HUB_CACHE', 'HF_HOME']
-    for cache_name in cache_list:
-        if cache_name in os.environ and osp.exists(os.environ[cache_name]):
-            if os.environ[cache_name].split('/')[-1] == 'hub':
-                return os.environ[cache_name]
-            else:
-                return osp.join(os.environ[cache_name], 'hub')
-    home = osp.expanduser('~')
-    root = osp.join(home, '.cache', 'huggingface', 'hub')
-    os.makedirs(root, exist_ok=True)
-    return root
+    from huggingface_hub.constants import HF_HUB_CACHE
+    return HF_HUB_CACHE
 
 
 def MMBenchOfficialServer(dataset_name):
@@ -289,8 +282,7 @@ def download_file(url, filename=None):
         with DownloadProgressBar(unit='B', unit_scale=True, miniters=1, desc=url.split('/')[-1]) as t:
             urllib.request.urlretrieve(url, filename=filename, reporthook=t.update_to)
     except Exception as e:
-        import logging
-        logging.warning(f'{type(e)}: {e}')
+        logger.warning(f'{type(e)}: {e}')
         # Handle Failed Downloads from huggingface.co
         if 'huggingface.co' in url:
             url_new = url.replace('huggingface.co', 'hf-mirror.com')
@@ -298,7 +290,7 @@ def download_file(url, filename=None):
                 download_file(url_new, filename)
                 return filename
             except Exception as e:
-                logging.warning(f'{type(e)}: {e}')
+                logger.warning(f'{type(e)}: {e}')
                 raise Exception(f'Failed to download {url}')
         else:
             raise Exception(f'Failed to download {url}')
@@ -494,7 +486,7 @@ def prepare_reuse_files(pred_root_meta, eval_id, model_name, dataset_name, reuse
             os.makedirs(bak_dir, exist_ok=True)
             for f in files:
                 shutil.move(f, bak_dir)
-            warnings.warn(
+            logger.warning(
                 f'--reuse flag not set but history records detected in {work_dir}. '
                 f'Those files are moved to {bak_dir} for backup. '
             )
@@ -514,16 +506,16 @@ def prepare_reuse_files(pred_root_meta, eval_id, model_name, dataset_name, reuse
             fs = ls(root, match=f'{model_name}_{dataset_name}.')
             if len(fs):
                 if len(fs) > 1:
-                    warnings.warn(f'Multiple candidates in {root}: {fs}. Will use {fs[0]}')
+                    logger.info(f'Multiple candidates in {root}: {fs}. Will use {fs[0]}')
                 prev_file = fs[0]
                 prev_aux_files = fetch_aux_files(prev_file)
                 break
         if prev_file is not None:
-            warnings.warn(f'--reuse is set, will reuse prediction file {prev_file}')
+            logger.info(f'--reuse is set, will reuse prediction file {prev_file}')
             os.system(f'cp {prev_file} {work_dir}')
 
     if not reuse_aux:
-        warnings.warn(f'--reuse-aux is not set, all auxiliary files in {work_dir} are removed. ')
+        logger.warning(f'--reuse-aux is not set, all auxiliary files in {work_dir} are removed. ')
         os.system(f'rm -rf {osp.join(work_dir, f"{model_name}_{dataset_name}_*openai*")}')
         os.system(f'rm -rf {osp.join(work_dir, f"{model_name}_{dataset_name}_*csv")}')
         os.system(f'rm -rf {osp.join(work_dir, f"{model_name}_{dataset_name}_*json")}')
@@ -532,5 +524,5 @@ def prepare_reuse_files(pred_root_meta, eval_id, model_name, dataset_name, reuse
     elif prev_aux_files is not None:
         for f in prev_aux_files:
             os.system(f'cp {f} {work_dir}')
-            warnings.warn(f'--reuse-aux is set, will reuse auxiliary file {f}')
+        logger.info('--reuse-aux is set, will reuse auxiliary file:\n' + '\n'.join(prev_aux_files))
     return

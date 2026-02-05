@@ -4,6 +4,7 @@ from vlmeval.config import supported_VLM
 from vlmeval.utils import track_progress_rich
 from vlmeval.smp import *
 
+logger = get_logger(__name__)
 FAIL_MSG = 'Failed to obtain answer via API.'
 
 
@@ -34,13 +35,20 @@ def infer_data_api(model, work_dir, model_name, dataset, index_set=None, api_npr
     lt, indices = len(data), list(data['index'])
 
     structs = []
+    if hasattr(model, 'use_custom_prompt') and model.use_custom_prompt(dataset_name):
+        logger.info(f'Use model custom prompt for {dataset_name}')
+    else:
+        logger.info(f'Use vanilla prompt for {dataset_name}')
     for i in range(lt):
         item = data.iloc[i]
-        if hasattr(model, 'use_custom_prompt') and model.use_custom_prompt(dataset_name):
-            assert hasattr(model, 'build_prompt')
-            struct = model.build_prompt(item, dataset=dataset_name)
-        else:
-            struct = dataset.build_prompt(item)
+        try:
+            if hasattr(model, 'use_custom_prompt') and model.use_custom_prompt(dataset_name):
+                assert hasattr(model, 'build_prompt')
+                struct = model.build_prompt(item, dataset=dataset_name)
+            else:
+                struct = dataset.build_prompt(item)
+        except Exception as e:
+            raise RuntimeError(f'Build prompt failed: {dataset}({i})') from e
         structs.append(struct)
 
     out_file = f'{work_dir}/{model_name}_{dataset_name}_supp.pkl'

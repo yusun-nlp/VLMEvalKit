@@ -4,6 +4,7 @@ import os.path as osp
 import torch
 from ..smp import *
 
+logger = get_logger(__name__)
 
 def get_gpu_num(model_name):
     model_name = model_name.lower()
@@ -53,8 +54,8 @@ class HFChatModel:
             context_window = self._get_context_length(model, model_path)
             return context_window
         except Exception as err:
-            self.logger.critical(f'{type(err)}: {err}')
-            self.logger.critical(
+            logger.critical(f'{type(err)}: {err}')
+            logger.critical(
                 'Failed to extract context_window information from config / generation_config. '
                 'Please read the above code and check if the logic works for you model path'
             )
@@ -65,12 +66,12 @@ class HFChatModel:
                  system_prompt: str = None,
                  **kwargs):
 
-        self.logger = get_logger('HFChatModel')
+        logger = get_logger('HFChatModel')
         if 'vicuna' in model_path.lower() or 'llama' in model_path.lower():
             try:
                 from fastchat.model import get_conversation_template
             except Exception as err:
-                self.logger.critical('Please install fastchat first to use vicuna. ')
+                logger.critical('Please install fastchat first to use vicuna. ')
                 raise err
 
         self.explicit_device = kwargs.pop('device', None)
@@ -85,7 +86,7 @@ class HFChatModel:
         from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel
 
         if model_path not in validated_llms:
-            self.logger.warning(f'{model_path} not in validated LLMs, may have inference troubles. ')
+            logger.warning(f'{model_path} not in validated LLMs, may have inference troubles. ')
 
         self.model_path = model_path
         if listinstr(Auto_model, model_path):
@@ -127,7 +128,7 @@ class HFChatModel:
                 model.generation_config = GenerationConfig.from_pretrained(
                     model_path, trust_remote_code=True, device_map=device)
             except Exception as err:
-                self.logger.warning(f'{type(err)}: {err}')
+                logger.warning(f'{type(err)}: {err}')
 
             self.context_length = self._get_context_length_robust(model=model, model_path=model_path)
 
@@ -136,7 +137,7 @@ class HFChatModel:
         self.answer_buffer = 192
         self.system_prompt = system_prompt
         for k, v in kwargs.items():
-            self.logger.info(f'Following args will be used for generation (If not set specifically), {k}: {v}. ')
+            logger.info(f'Following args will be used for generation (If not set specifically), {k}: {v}. ')
         self.kwargs = kwargs
 
     def generate_str(self, input, **kwargs):

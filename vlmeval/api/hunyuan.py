@@ -12,6 +12,7 @@ import json
 import base64
 import time
 
+logger = get_logger(__name__)
 
 class HunyuanWrapper(BaseAPI):
 
@@ -55,7 +56,7 @@ class HunyuanWrapper(BaseAPI):
             from tencentcloud.common.profile.http_profile import HttpProfile
             from tencentcloud.hunyuan.v20230901 import hunyuan_client
         except ImportError as err:
-            self.logger.critical('Please install tencentcloud-sdk-python to use Hunyuan API. ')
+            logger.critical('Please install tencentcloud-sdk-python to use Hunyuan API. ')
             raise err
 
         super().__init__(retry=retry, system_prompt=system_prompt, verbose=verbose, **kwargs)
@@ -66,7 +67,7 @@ class HunyuanWrapper(BaseAPI):
         clientProfile = ClientProfile()
         clientProfile.httpProfile = httpProfile
         self.client = hunyuan_client.HunyuanClient(cred, '', clientProfile)
-        self.logger.info(
+        logger.info(
             f'Using Endpoint: {self.endpoint}; API Secret ID: {self.secret_id}; API Secret Key: {self.secret_key}'
         )
 
@@ -166,7 +167,7 @@ class HunyuanWrapper(BaseAPI):
             answer = resp['Choices'][0]['Message']['Content']
             return 0, answer, resp
         except TencentCloudSDKException as e:
-            self.logger.error(f'Got error code: {e.get_code()}')
+            logger.error(f'Got error code: {e.get_code()}')
             if e.get_code() == 'ClientNetworkError':
                 return -1, self.fail_msg + e.get_code(), None
             elif e.get_code() in ['InternalError', 'ServerNetworkError']:

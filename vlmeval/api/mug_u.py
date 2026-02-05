@@ -5,6 +5,7 @@ from ..dataset import DATASET_TYPE, DATASET_MODALITY
 from vlmeval.api.base import BaseAPI
 from vlmeval.smp import *
 
+logger = get_logger(__name__)
 
 class MUGUWrapper(BaseAPI):
 
@@ -35,9 +36,9 @@ class MUGUWrapper(BaseAPI):
         _ = requests.get(model_url)
         self.model = model
         if hasattr(self, 'custom_prompt'):
-            self.logger.info(f'using custom prompt {self.custom_prompt}')
+            logger.info(f'using custom prompt {self.custom_prompt}')
         self.temperature = temperature
-        self.logger.info(f'Init temperature: {self.temperature}')
+        logger.info(f'Init temperature: {self.temperature}')
         self.use_mpo_prompt = use_mpo_prompt
 
         self.temperature = 0.0
@@ -172,7 +173,7 @@ class MUGUWrapper(BaseAPI):
         input_msgs = self.prepare_inputs(inputs)
 
         temperature = kwargs.pop('temperature', self.temperature)
-        self.logger.info(f'Generate temperature: {temperature}')
+        logger.info(f'Generate temperature: {temperature}')
         max_tokens = kwargs.pop('max_tokens', self.max_tokens)
 
         headers = {'Content-Type': 'application/json'}

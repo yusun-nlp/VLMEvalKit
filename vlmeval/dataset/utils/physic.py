@@ -52,6 +52,8 @@ def PHYSIC_auxeval(model, line):
         gt = line['answer'].strip()
 
         flat_preds = [item.strip() for group in pred_boxed for item in (group if isinstance(group, list) else [group])]
+        # Deduplicate preds to handle repeat output.
+        flat_preds = list(set(flat_preds))
 
         if gt in flat_preds:
             equiv_data['LOG'] = 'GT found in prediction, returning True.'

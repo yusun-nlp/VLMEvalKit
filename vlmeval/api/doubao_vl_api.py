@@ -13,6 +13,7 @@ import base64
 import time
 from openai import OpenAI
 
+logger = get_logger(__name__)
 
 class DoubaoVLWrapper(BaseAPI):
 
@@ -55,7 +56,7 @@ class DoubaoVLWrapper(BaseAPI):
         if endpoint is not None:
             self.endpoint = endpoint
         else:
-            self.logger.warning(
+            logger.warning(
                 f'Endpoint for model {model} is not set (can be set w. environment var {EP_KEY}. '
                 f'By default, we will use the model name {model} as the EP if not set. '
             )
@@ -67,7 +68,7 @@ class DoubaoVLWrapper(BaseAPI):
             timeout=self.timeout
         )
 
-        self.logger.info(f'Using API Base: {self.api_base}; End Point: {self.endpoint}; API Key: {self.key}')
+        logger.info(f'Using API Base: {self.api_base}; End Point: {self.endpoint}; API Key: {self.key}')
 
     def dump_image(self, line, dataset):
         """Dump the image(s) of the input line to the corresponding dataset folder.
@@ -186,8 +187,8 @@ class DoubaoVLWrapper(BaseAPI):
             answer = response.choices[0].message.content.strip()
             ret_code = 0
         except Exception as err:
-            self.logger.error(f'{type(err)}: {err}')
-            self.logger.error(response.text if hasattr(response, 'text') else response)
+            logger.error(f'{type(err)}: {err}')
+            logger.error(response.text if hasattr(response, 'text') else response)
 
         return ret_code, answer, response
 

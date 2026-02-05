@@ -3,6 +3,7 @@ import os
 import sys
 from .base import BaseAPI
 
+logger = get_logger(__name__)
 APIBASES = {
     'OFFICIAL': 'http://localhost:8000/v1/chat/completions',
 }
@@ -50,7 +51,7 @@ class KimiVLAPIWrapper(BaseAPI):
         super().__init__(retry=retry, system_prompt=system_prompt, verbose=verbose, **kwargs)
 
         if 'KIMI_VL_API_BASE' in os.environ and os.environ['KIMI_VL_API_BASE'] != '':
-            self.logger.info('Environment variable KIMI_VL_API_BASE is set. Will use it as api_base. ')
+            logger.info('Environment variable KIMI_VL_API_BASE is set. Will use it as api_base. ')
             api_base = os.environ['KIMI_VL_API_BASE']
         else:
             api_base = 'OFFICIAL'
@@ -64,10 +65,10 @@ class KimiVLAPIWrapper(BaseAPI):
         elif api_base.startswith('http'):
             self.api_base = api_base
         else:
-            self.logger.error('Unknown API Base. ')
+            logger.error('Unknown API Base. ')
             raise NotImplementedError
 
-        self.logger.info(f'Using API Base: {self.api_base}; API Key: {self.key}')
+        logger.info(f'Using API Base: {self.api_base}; API Key: {self.key}')
 
     # inputs can be a lvl-2 nested list: [content1, content2, content3, ...]
     # content can be a string or a list of image & text
@@ -112,7 +113,7 @@ class KimiVLAPIWrapper(BaseAPI):
                 "content": "◁think▷\n\n◁/think▷",
                 "partial": True
             })
-            self.logger.info("Add skip thinking pattern")
+            logger.info("Add skip thinking pattern")
         return input_msgs
 
     def generate_inner(self, inputs, **kwargs) -> str:
@@ -144,11 +145,11 @@ class KimiVLAPIWrapper(BaseAPI):
             answer = extract_summary(answer)
             length_after_es = len(answer.split())
             if length_befofe_es != length_after_es:
-                self.logger.info("Thinking length: {}".format(length_befofe_es - length_after_es))
+                logger.info("Thinking length: {}".format(length_befofe_es - length_after_es))
         except Exception as err:
             if self.verbose:
-                self.logger.error(f'{type(err)}: {err}')
-                self.logger.error(response.text if hasattr(response, 'text') else response)
+                logger.error(f'{type(err)}: {err}')
+                logger.error(response.text if hasattr(response, 'text') else response)
 
         return ret_code, answer, response
 

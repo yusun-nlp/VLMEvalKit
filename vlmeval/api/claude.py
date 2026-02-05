@@ -5,6 +5,8 @@ import base64
 import mimetypes
 from PIL import Image
 
+logger = get_logger(__name__)
+
 alles_url = 'https://openxlab.org.cn/gw/alles-apin-hub/v1/claude/v1/text/chat'
 alles_headers = {
     'alles-apin-token': '',
@@ -135,8 +137,8 @@ class Claude_Wrapper(BaseAPI):
                 answer = resp_struct['content'][0]['text'].strip()
         except Exception as err:
             if self.verbose:
-                self.logger.error(f'{type(err)}: {err}')
-                self.logger.error(response.text if hasattr(response, 'text') else response)
+                logger.error(f'{type(err)}: {err}')
+                logger.error(response.text if hasattr(response, 'text') else response)
 
         return ret_code, answer, response
 

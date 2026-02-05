@@ -10,6 +10,7 @@ import random
 import numpy as np
 import math
 
+logger = get_logger(__name__)
 
 def get_frame_indices(num_frames, vlen, sample='rand', fix_start=None, input_fps=1, max_num_frames=-1):
     if sample in ['rand', 'middle']:
@@ -155,9 +156,8 @@ class mPLUG_Owl3(BaseModel):
         )
         self.model.eval().cuda()
         self.processor = self.model.init_processor(self.tokenizer)
-        self.logger = get_logger('mPLUG_Owl3')
         if self.INSTALL_REQ:
-            self.logger.info(
+            logger.info(
                 f'Please remember to meet the requirements first\n'
                 f'Here: {self.INSTALL_REQ_TXT}'
             )

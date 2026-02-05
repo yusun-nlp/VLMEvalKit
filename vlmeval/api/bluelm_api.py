@@ -5,6 +5,7 @@ import os
 import re
 import json
 
+logger = get_logger(__name__)
 
 def split_think(text: str) -> str:
     """
@@ -219,12 +220,12 @@ class BlueLMWrapper(BaseAPI):
                 answer = extract_boxed_answer(answer)
             else:
                 answer = split_think(response[0])
-            self.logger.info(f'answer : {answer}')
+            logger.info(f'answer : {answer}')
             return 0, answer, 'Succeeded! '
         except Exception as err:
             if self.verbose:
-                self.logger.error(f'{type(err)}: {err}')
-                self.logger.error(f'The input messages are {inputs}.')
+                logger.error(f'{type(err)}: {err}')
+                logger.error(f'The input messages are {inputs}.')
             return -1, '', ''
 
 

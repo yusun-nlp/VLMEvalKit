@@ -66,3 +66,6 @@ cairosvg
 # For UniSVG
 sentence_transformers
 bert_score
+# For ChartMimic v2
+matplotlib_venn
+squarify

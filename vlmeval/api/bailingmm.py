@@ -5,6 +5,7 @@ from vlmeval.dataset import DATASET_TYPE
 from vlmeval.smp.vlm import encode_image_file_to_base64
 import time
 
+logger = get_logger(__name__)
 
 class bailingMMWrapper(BaseAPI):
 
@@ -45,7 +46,7 @@ class bailingMMWrapper(BaseAPI):
                     image_data = self.image_to_base64(msg['value'])
                 except Exception as e:
                     if self.verbose:
-                        self.logger.error(e)
+                        logger.error(e)
                     image_data = ''
                 msg['value'] = image_data
             content.append(msg)
@@ -68,19 +69,19 @@ class bailingMMWrapper(BaseAPI):
         }
         response = requests.post(service_url, headers=self.headers, json=payload)
         if self.verbose:
-            self.logger.info('Time for requesting is:')
-            self.logger.info(time.time() - start)
+            logger.info('Time for requesting is:')
+            logger.info(time.time() - start)
         try:
             assert response.status_code == 200
             output = json.loads(response.text)
             answer = output['preds']['pred']
             if self.verbose:
-                self.logger.info(f'inputs: {inputs}\nanswer: {answer}')
+                logger.info(f'inputs: {inputs}\nanswer: {answer}')
             return 0, answer, 'Succeeded! '
         except Exception as e:
             if self.verbose:
-                self.logger.error(e)
-                self.logger.error(f'The input messages are {inputs}.')
+                logger.error(e)
+                logger.error(f'The input messages are {inputs}.')
             return -1, self.fail_msg, ''
 
 

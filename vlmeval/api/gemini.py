@@ -3,6 +3,7 @@ from vlmeval.api.base import BaseAPI
 
 headers = 'Content-Type: application/json'
 
+logger = get_logger(__name__)
 
 class GeminiWrapper(BaseAPI):
 
@@ -156,8 +157,8 @@ class GeminiWrapper(BaseAPI):
                 return 0, answer, 'Succeeded! '
             except Exception as err:
                 if self.verbose:
-                    self.logger.error(f'{type(err)}: {err}')
-                    self.logger.error(f'The input messages are {inputs}.')
+                    logger.error(f'{type(err)}: {err}')
+                    logger.error(f'The input messages are {inputs}.')
 
                 return -1, '', ''
         elif self.backend == 'vertex':
@@ -173,8 +174,8 @@ class GeminiWrapper(BaseAPI):
                 return 0, answer, 'Succeeded! '
             except Exception as err:
                 if self.verbose:
-                    self.logger.error(f'{type(err)}: {err}')
-                    self.logger.error(f'The input messages are {inputs}.')
+                    logger.error(f'{type(err)}: {err}')
+                    logger.error(f'The input messages are {inputs}.')
 
                 return -1, '', ''
 

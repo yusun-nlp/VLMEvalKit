@@ -5,6 +5,7 @@ from ..dataset import DATASET_TYPE, DATASET_MODALITY
 from vlmeval.api.base import BaseAPI
 from vlmeval.smp import *
 
+logger = get_logger(__name__)
 
 def process_prediction_text(text):
     if not isinstance(text, str):
@@ -333,14 +334,14 @@ class RBdashMMChat3_78B_Wrapper(BaseAPI):
         resp = requests.get(model_url)
         model_id_list = [str(data['id']) for data in resp.json()['data']]
         self.model = model if model in model_id_list else model_id_list[0]
-        self.logger.info(f'lmdeploy evaluate model: {self.model}')
+        logger.info(f'lmdeploy evaluate model: {self.model}')
 
         self.max_tokens = 20480
         self.temperature = 0.0
         self.custom_prompt = 'rbdash3'
 
-        self.logger.info(f'using custom prompt {self.custom_prompt}')
-        self.logger.info(f'Init temperature: {self.temperature}')
+        logger.info(f'using custom prompt {self.custom_prompt}')
+        logger.info(f'Init temperature: {self.temperature}')
         self.system_prompt = R1_SYSTEM_PROMPT
 
     def set_dump_image(self, dump_image_func):
@@ -399,7 +400,7 @@ class RBdashMMChat3_78B_Wrapper(BaseAPI):
 
     def generate_inner(self, inputs, **kwargs) -> str:
         temperature = kwargs.pop('temperature', self.temperature)
-        self.logger.info(f'Generate temperature: {temperature}')
+        logger.info(f'Generate temperature: {temperature}')
         max_tokens = kwargs.pop('max_tokens', self.max_tokens)
         dataset = kwargs.pop('dataset', None)
         if listinstr(['MMMU_DEV_VAL', 'MathVista'], dataset):
@@ -412,7 +413,7 @@ class RBdashMMChat3_78B_Wrapper(BaseAPI):
         if dataset is not None and listinstr(['BMMR'], dataset):
             # BMMR dataset has a very long prompt, so we need to increase max_tokens
             max_tokens = 8196
-            self.logger.info('BMMR dataset detected, set max_tokens to 8196')
+            logger.info('BMMR dataset detected, set max_tokens to 8196')
 
         headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.key}'}
         payload = dict(
@@ -472,14 +473,14 @@ class RBdashMMChat3_5_38B_Wrapper(BaseAPI):
         resp = requests.get(model_url)
         model_id_list = [str(data['id']) for data in resp.json()['data']]
         self.model = model if model in model_id_list else model_id_list[0]
-        self.logger.info(f'lmdeploy evaluate model: {self.model}')
+        logger.info(f'lmdeploy evaluate model: {self.model}')
 
         self.max_tokens = 20480
         self.temperature = 0.0
         self.custom_prompt = 'rbdash3_5'
 
-        self.logger.info(f'using custom prompt {self.custom_prompt}')
-        self.logger.info(f'Init temperature: {self.temperature}')
+        logger.info(f'using custom prompt {self.custom_prompt}')
+        logger.info(f'Init temperature: {self.temperature}')
         self.system_prompt = R1_SYSTEM_PROMPT
 
     def set_dump_image(self, dump_image_func):
@@ -538,7 +539,7 @@ class RBdashMMChat3_5_38B_Wrapper(BaseAPI):
 
     def generate_inner(self, inputs, **kwargs) -> str:
         temperature = kwargs.pop('temperature', self.temperature)
-        self.logger.info(f'Generate temperature: {temperature}')
+        logger.info(f'Generate temperature: {temperature}')
         max_tokens = kwargs.pop('max_tokens', self.max_tokens)
         dataset = kwargs.pop('dataset', None)
         if listinstr([
@@ -554,7 +555,7 @@ class RBdashMMChat3_5_38B_Wrapper(BaseAPI):
         if dataset is not None and listinstr(['BMMR'], dataset):
             # BMMR dataset has a very long prompt, so we need to increase max_tokens
             max_tokens = 8196
-            self.logger.info('BMMR dataset detected, set max_tokens to 8196')
+            logger.info('BMMR dataset detected, set max_tokens to 8196')
 
         headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.key}'}
         payload = dict(

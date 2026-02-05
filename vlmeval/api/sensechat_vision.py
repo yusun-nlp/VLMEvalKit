@@ -12,11 +12,13 @@ from vlmeval.smp import (
     toliststr,
     listinstr,
     cn_string,
+    get_logger,
 )
 from vlmeval.api.base import BaseAPI
 from vlmeval.dataset import img_root_map
 from vlmeval.dataset import DATASET_TYPE
 
+logger = get_logger(__name__)
 
 class SenseChatVisionWrapper(BaseAPI):
     is_api: bool = True
@@ -268,27 +270,27 @@ class SenseChatVisionWrapper(BaseAPI):
             json=data,
         )
         request_id = response.headers.get("x-request-id", "")
-        self.logger.info(f"Request-id: {request_id}")
+        logger.info(f"Request-id: {request_id}")
 
         time.sleep(1)
         try:
             assert response.status_code == 200
             response = response.json()["data"]["choices"][0]["message"].strip()
             if self.verbose:
-                self.logger.info(f"inputs: {inputs}\nanswer: {response}")
+                logger.info(f"inputs: {inputs}\nanswer: {response}")
             return 0, response, "Succeeded! "
         except Exception as err:
             if self.verbose:
-                self.logger.error(
+                logger.error(
                     "---------------------------ERROR---------------------------"
                 )
-                self.logger.error(response.json())
-                self.logger.error(err)
-                self.logger.error(
+                logger.error(response.json())
+                logger.error(err)
+                logger.error(
                     "---------------------------request_id---------------------------"
                     + request_id
                 )
-                self.logger.error(
+                logger.error(
                     "api error"
                     + response.json()["error"]["message"]
                     + str(
@@ -298,7 +300,7 @@ class SenseChatVisionWrapper(BaseAPI):
                         ]
                     )
                 )
-                self.logger.error(f"The input messages are {inputs}.")
+                logger.error(f"The input messages are {inputs}.")
             return -1, response.json()["error"]["message"], ""
 
 

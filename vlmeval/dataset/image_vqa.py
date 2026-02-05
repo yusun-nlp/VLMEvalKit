@@ -871,8 +871,10 @@ class OlympiadBench(ImageBaseDataset):
         return tgt_path_z
 
     def build_prompt(self, line):
-
         from .utils.olympiadbench import get_answer_type_text, make_input
+
+        if isinstance(line, int):
+            line = self.data.iloc[line]
 
         self.is_chinese = 'zh' in line['source']
         self.is_math = 'maths' in line['source']
@@ -1271,13 +1273,15 @@ class LogicVista(ImageBaseDataset):
         'https://opencompass.openxlab.space/utils/VLMEval/LogicVista.tsv'
     }
     DATASET_MD5 = {'LogicVista': '41c5d33adf33765c399e0e6ae588c061'}
-    DEFAULT_JUDGE = ['gpt-4-0125', 'gpt-4-turbo', 'gpt-4o-mini']
 
     def evaluate(self, eval_file, **judge_kwargs):
         from .utils.logicvista import LogicVista_auxeval, evaluate_logicvista
 
         # model = judge_kwargs['model']
         model = judge_kwargs.get('model', 'exact_matching')
+        assert model in [
+            'exact_matching', 'gpt-4-0125', 'gpt-4-turbo', 'gpt-4o-mini'
+        ], model
         name_str_map = {
             'gpt-4-0125': 'gpt4',
             'gpt-4-turbo': 'gpt4-turbo',
@@ -2534,7 +2538,6 @@ class MMSci_Captioning(ImageBaseDataset):
         'MMSci_DEV_Captioning_image_only': '0f5f0fd7ff383699fbd2203a4659d3e8',
         'MMSci_DEV_Captioning_with_abs': 'ae4a9b88166153efd74e28c989e4a484'
     }
-    DEFAULT_JUDGE = ['gpt-4o-0806', 'gemini-1.5-pro-exp-0801']
 
     def evaluate(self, eval_file, **judge_kwargs):
         from .utils.mmsci import (get_all_metrics_for_g_eval_score,
@@ -2612,6 +2615,7 @@ class MMSci_Captioning(ImageBaseDataset):
             model = judge_kwargs.pop('model', 'gpt-4o-0806')
             nproc = judge_kwargs.pop('nproc', 4)
             # not supported gemini-1.5-pro-exp-0801 as judge model yet、
+            # assert model in ['gpt-4o-0806', 'gemini-1.5-pro-exp-0801']
             judge_model = build_judge(model=model, **judge_kwargs)
 
             assert judge_model.working(), (
@@ -3489,8 +3493,12 @@ class OCRBench_v2(ImageBaseDataset):
     DATASET_URL = {
         'OCRBench_v2':
         'https://huggingface.co/datasets/QYWH/ocrbench_v2/resolve/main/OCRBench_v2.tsv?download=true',
+        'OCRBench_v2_MINI': None,
     }
-    DATASET_MD5 = {'OCRBench_v2': '65d04fe07b4d4ee33e73fc8e7d4d46b0'}
+    DATASET_MD5 = {
+        'OCRBench_v2': '65d04fe07b4d4ee33e73fc8e7d4d46b0',
+        'OCRBench_v2_MINI': '11f79b8e1e0b0fe150964de4cb2feb02',
+    }
 
     # It returns a dictionary
     @classmethod

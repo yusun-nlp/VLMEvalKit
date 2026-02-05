@@ -102,7 +102,6 @@ def SFE_auxeval(model, data):
 
 
 class SFE(ImageVQADataset):
-
     DATASET_URL = {
         'SFE': 'https://opencompass.openxlab.space/utils/VLMEval/SFE.tsv',
         'SFE-zh': 'https://opencompass.openxlab.space/utils/VLMEval/SFE-zh.tsv'
@@ -113,20 +112,32 @@ class SFE(ImageVQADataset):
         'SFE-zh': '3e0250b7f30da55bf8f7b95eace66d82'
     }
 
+    # MCQ_PROMPT = (
+    #     "You are an expert in {discipline} and need to solve the following question. "
+    #     + "The question is a multiple-choice question. "
+    #     + "Answer with the option letter from the given choices."
+    # )
+
+    # EXACT_MATCH_PROMPT = (
+    #     "You are an expert in {discipline} and need to solve the following question. "
+    #     + "The question is an exact match question. Answer the question using a single word or phrase."
+    # )
+
+    # OPEN_QUESTION_PROMPT = (
+    #     "You are an expert in {discipline} and need to solve the following question. "
+    #     + "The question is an open-ended question. Answer the question using a phrase."
+    # )
+
     MCQ_PROMPT = (
-        "You are an expert in {discipline} and need to solve the following question. "
-        + "The question is a multiple-choice question. "
-        + "Answer with the option letter from the given choices."
+        "You are an expert in {discipline} and need to solve the following question."
     )
 
     EXACT_MATCH_PROMPT = (
-        "You are an expert in {discipline} and need to solve the following question. "
-        + "The question is an exact match question. Answer the question using a single word or phrase."
+        "You are an expert in {discipline} and need to solve the following question."
     )
 
     OPEN_QUESTION_PROMPT = (
-        "You are an expert in {discipline} and need to solve the following question. "
-        + "The question is an open-ended question. Answer the question using a phrase."
+        "You are an expert in {discipline} and need to solve the following question."
     )
 
     def build_prompt(self, line):
